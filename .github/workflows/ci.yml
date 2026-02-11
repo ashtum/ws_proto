@@ -252,7 +252,7 @@ jobs:
           path: websocket-root
 
       - name: Setup C++
-        uses: alandefreitas/cpp-actions/setup-cpp@v1.9.0
+        uses: alandefreitas/cpp-actions/setup-cpp@v1.9.2
         id: setup-cpp
         with:
           compiler: ${{ matrix.compiler }}
@@ -261,7 +261,7 @@ jobs:
           trace-commands: true
 
       - name: Install packages
-        uses: alandefreitas/cpp-actions/package-install@v1.9.0
+        uses: alandefreitas/cpp-actions/package-install@v1.9.2
         id: package-install
         with:
           apt-get-add-architecture: ${{ matrix.x86 && 'i386' || '' }}
@@ -270,39 +270,21 @@ jobs:
             build-essential libssl-dev zlib1g-dev libbrotli-dev
             ${{ matrix.x86 && 'libssl-dev:i386 zlib1g-dev:i386 libbrotli-dev:i386' || '' }}
 
-      - name: Clone Buffers
-        uses: actions/checkout@v4
-        with:
-          repository: cppalliance/buffers
-          ref: ${{ (github.ref_name == 'master' && github.ref_name) || 'develop' }}
-          path: buffers-root
-
-      - name: Clone HTTP
-        uses: actions/checkout@v4
-        with:
-          repository: cppalliance/http
-          ref: ${{ (github.ref_name == 'master' && github.ref_name) || 'develop' }}
-          path: http-root
-
-      - name: Clone Capy
-        uses: actions/checkout@v4
-        with:
-          repository: cppalliance/capy
-          ref: ${{ (github.ref_name == 'master' && github.ref_name) || 'develop' }}
-          path: capy-root
-
       - name: Clone Boost
-        uses: alandefreitas/cpp-actions/boost-clone@v1.9.0
+        uses: alandefreitas/cpp-actions/boost-clone@develop
         id: boost-clone
         with:
           branch: ${{ (github.ref_name == 'master' && github.ref_name) || 'develop' }}
           boost-dir: boost-source
           modules-exclude-paths: ''
-          scan-modules-dir: http-root
-          scan-modules-ignore: websocket,buffers,http,capy
+          scan-modules-dir: websocket-root
+          patches: >
+            https://github.com/cppalliance/buffers
+            https://github.com/cppalliance/http
+            https://github.com/cppalliance/capy
 
       - name: Install Packages (Windows)
-        uses: alandefreitas/cpp-actions/package-install@v1.9.0
+        uses: alandefreitas/cpp-actions/package-install@v1.9.2
         if: ${{ startsWith(matrix.runs-on, 'windows') }}
         id: package-install-windows
         with:
@@ -348,9 +330,6 @@ jobs:
         shell: bash
         run: |
           set -xe
-          pwd
-          ls
-          ls -lah boost-source
 
           # Identify boost module being tested
           module=${GITHUB_REPOSITORY#*/}
@@ -359,12 +338,6 @@ jobs:
           # Identify GitHub workspace root
           workspace_root=$(echo "$GITHUB_WORKSPACE" | sed 's/\\/\//g')
           echo -E "workspace_root=$workspace_root" >> $GITHUB_OUTPUT
-
-          # Remove module from boost-source
-          rm -r "boost-source/libs/$module" || true
-          rm -r "boost-source/libs/buffers" || true
-          rm -r "boost-source/libs/http" || true
-          rm -r "boost-source/libs/capy" || true
 
           # Copy cached boost-source to an isolated boost-root
           cp -r boost-source boost-root
@@ -376,15 +349,11 @@ jobs:
           echo -E "boost_root=$boost_root" >> $GITHUB_OUTPUT
 
           # Patch boost-root with workspace module
+          rm -r "libs/$module" || true
           cp -r "$workspace_root"/websocket-root "libs/$module"
 
-          # Patch boost-root with dependencies
-          cp -r "$workspace_root"/buffers-root "libs/buffers"
-          cp -r "$workspace_root"/http-root "libs/http"
-          cp -r "$workspace_root"/capy-root "libs/capy"
-
       - name: Boost B2 Workflow
-        uses: alandefreitas/cpp-actions/b2-workflow@v1.9.0
+        uses: alandefreitas/cpp-actions/b2-workflow@v1.9.2
         if: ${{ !matrix.coverage }}
         env:
           ASAN_OPTIONS: ${{ ((matrix.compiler == 'apple-clang' || matrix.compiler == 'clang') && 'detect_invalid_pointer_pairs=0:strict_string_checks=1:detect_stack_use_after_return=1:check_initialization_order=1:strict_init_order=1') || 'detect_invalid_pointer_pairs=2:strict_string_checks=1:detect_stack_use_after_return=1:check_initialization_order=1:strict_init_order=1' }}
@@ -405,7 +374,7 @@ jobs:
           stop-on-error: true
 
       - name: Boost CMake Workflow
-        uses: alandefreitas/cpp-actions/cmake-workflow@v1.9.0
+        uses: alandefreitas/cpp-actions/cmake-workflow@v1.9.2
         if: ${{ matrix.coverage || matrix.build-cmake || matrix.is-earliest }}
         with:
           source-dir: boost-root
@@ -446,7 +415,7 @@ jobs:
       # This causes find_package(Boost COMPONENTS burl) to fail because
       # boost_burlConfig.cmake is never installed.
       - name: Find Package Integration Workflow
-        uses: alandefreitas/cpp-actions/cmake-workflow@v1.9.0
+        uses: alandefreitas/cpp-actions/cmake-workflow@v1.9.2
         if: false # ${{ matrix.build-cmake || matrix.is-earliest }}
         with:
           source-dir: boost-root/libs/${{ steps.patch.outputs.module }}/test/cmake_test
@@ -470,7 +439,7 @@ jobs:
           toolchain: ${{ (startsWith(matrix.runs-on, 'windows') && steps.patch-user-config.outputs.toolchain) || '' }}
 
       - name: Subdirectory Integration Workflow
-        uses: alandefreitas/cpp-actions/cmake-workflow@v1.9.0
+        uses: alandefreitas/cpp-actions/cmake-workflow@v1.9.2
         if: ${{ matrix.build-cmake || matrix.is-earliest }}
         with:
           source-dir: boost-root/libs/${{ steps.patch.outputs.module }}/test/cmake_test
@@ -491,7 +460,7 @@ jobs:
           toolchain: ${{ (startsWith(matrix.runs-on, 'windows') && steps.patch-user-config.outputs.toolchain) || '' }}
 
       - name: Root Project CMake Workflow
-        uses: alandefreitas/cpp-actions/cmake-workflow@v1.9.0
+        uses: alandefreitas/cpp-actions/cmake-workflow@v1.9.2
         if: ${{ matrix.build-cmake || matrix.is-earliest }}
         with:
           source-dir: boost-root/libs/${{ steps.patch.outputs.module }}
@@ -562,7 +531,7 @@ jobs:
           fetch-depth: 100
 
       - name: Changelog
-        uses: alandefreitas/cpp-actions/create-changelog@v1.9.0
+        uses: alandefreitas/cpp-actions/create-changelog@v1.9.2
         with:
           thank-non-regular: ${{ startsWith(github.ref, 'refs/tags/') }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -580,7 +549,7 @@ jobs:
         shell: bash
     steps:
       - name: Install packages
-        uses: alandefreitas/cpp-actions/package-install@v1.9.0
+        uses: alandefreitas/cpp-actions/package-install@v1.9.2
         with:
           apt-get: git cmake
 
@@ -589,45 +558,24 @@ jobs:
         with:
           path: websocket-root
 
-      - name: Clone Buffers
-        uses: actions/checkout@v4
-        with:
-          repository: cppalliance/buffers
-          ref: ${{ (github.ref_name == 'master' && github.ref_name) || 'develop' }}
-          path: buffers-root
-
-      - name: Clone HTTP
-        uses: actions/checkout@v4
-        with:
-          repository: cppalliance/http
-          ref: ${{ (github.ref_name == 'master' && github.ref_name) || 'develop' }}
-          path: http-root
-
-      - name: Clone Capy
-        uses: actions/checkout@v4
-        with:
-          repository: cppalliance/capy
-          ref: ${{ (github.ref_name == 'master' && github.ref_name) || 'develop' }}
-          path: capy-root
-
       - name: Clone Boost
-        uses: alandefreitas/cpp-actions/boost-clone@v1.9.0
+        uses: alandefreitas/cpp-actions/boost-clone@develop
         id: boost-clone
         with:
           branch: ${{ (github.ref_name == 'master' && github.ref_name) || 'develop' }}
           boost-dir: boost-source
           modules-exclude-paths: ''
-          scan-modules-dir: http-root
-          scan-modules-ignore: websocket,buffers,http,capy
+          scan-modules-dir: websocket-root
+          patches: >
+            https://github.com/cppalliance/buffers
+            https://github.com/cppalliance/http
+            https://github.com/cppalliance/capy
 
       - name: Patch Boost
         id: patch
         shell: bash
         run: |
           set -xe
-          pwd
-          ls
-          ls -lah boost-source
 
           # Identify boost module being tested
           module=${GITHUB_REPOSITORY#*/}
@@ -636,12 +584,6 @@ jobs:
           # Identify GitHub workspace root
           workspace_root=$(echo "$GITHUB_WORKSPACE" | sed 's/\\/\//g')
           echo -E "workspace_root=$workspace_root" >> $GITHUB_OUTPUT
-
-          # Remove module from boost-source
-          rm -r "boost-source/libs/$module" || true
-          rm -r "boost-source/libs/buffers" || true
-          rm -r "boost-source/libs/http" || true
-          rm -r "boost-source/libs/capy" || true
 
           # Copy cached boost-source to an isolated boost-root
           cp -r boost-source boost-root
@@ -653,12 +595,8 @@ jobs:
           echo -E "boost_root=$boost_root" >> $GITHUB_OUTPUT
 
           # Patch boost-root with workspace module
+          rm -r "libs/$module" || true
           cp -r "$workspace_root"/websocket-root "libs/$module"
-
-          # Patch boost-root with dependencies
-          cp -r "$workspace_root"/buffers-root "libs/buffers"
-          cp -r "$workspace_root"/http-root "libs/http"
-          cp -r "$workspace_root"/capy-root "libs/capy"
 
       - uses: actions/setup-node@v4
         with:
